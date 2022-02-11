@@ -1,0 +1,10 @@
+I"�<p>안녕하세요~
+<br />
+seculetter 분석팀에서 분석한 cve-2019-7063 취약점을 d.이번 포스팅을 통해 공유해드리고자 합니다~
+<br /><br />
+분석에 들어가기앞서, 취약점 내용을 간단하게 살펴보면.. <code class="language-plaintext highlighter-rouge">NVD (national vulnerability database)</code> 라는 미국에서 운영하고 있는 취약점 정보들을 리스팅해놓은 사이트가 있습니다. 해당 홈페이지에서는 <code class="language-plaintext highlighter-rouge">cve-2019-7063</code> 취약점에 대해 아래와 같이 설명을 해놓고 있습니다.
+<br /></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Adobe Acrobat and Reader versions 2019.010.20069 and earlier,
+2019.010.20069 and earlier, 2017.011.30113 and earlier version,and 2015.006.30464 and earlier have an out-of-bounds read vulnerability. Successful exploitation could lead to information disclosure.
+</code></pre></div></div>
+:ET

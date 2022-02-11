@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.2.1">Jekyll</generator><link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4000/" rel="alternate" type="text/html" /><updated>2022-01-28T10:57:40+09:00</updated><id>http://localhost:4000/feed.xml</id><title type="html">SECULETTER</title><subtitle>Write an awesome description for your new site here. You can edit this line in _config.yml. It will appear in your document head meta (for Google search results) and in your feed.xml site description.</subtitle><author><name>seculetter</name></author><entry><title type="html">CVE-2019-7063 취약점 분석</title><link href="http://localhost:4000/cve/2022/01/27/CVE-2019-7063-post.html" rel="alternate" type="text/html" title="CVE-2019-7063 취약점 분석" /><published>2022-01-27T00:00:00+09:00</published><updated>2022-01-27T00:00:00+09:00</updated><id>http://localhost:4000/cve/2022/01/27/CVE-2019-7063-post</id><content type="html" xml:base="http://localhost:4000/cve/2022/01/27/CVE-2019-7063-post.html"><![CDATA[<p>안녕하세요~
+<br />
+seculetter 분석팀에서 분석한 cve-2019-7063 취약점을 d.이번 포스팅을 통해 공유해드리고자 합니다~
+<br /><br />
+분석에 들어가기앞서, 취약점 내용을 간단하게 살펴보면.. <code class="language-plaintext highlighter-rouge">NVD (national vulnerability database)</code> 라는 미국에서 운영하고 있는 취약점 정보들을 리스팅해놓은 사이트가 있습니다. 해당 홈페이지에서는 <code class="language-plaintext highlighter-rouge">cve-2019-7063</code> 취약점에 대해 아래와 같이 설명을 해놓고 있습니다.
+<br /></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Adobe Acrobat and Reader versions 2019.010.20069 and earlier,
+2019.010.20069 and earlier, 2017.011.30113 and earlier version,and 2015.006.30464 and earlier have an out-of-bounds read vulnerability. Successful exploitation could lead to information disclosure.
+</code></pre></div></div>
+
+<p><br /><br />
+이 취약점에 적용되는 어플리케이션 버전과 어떤 취약점인지, 또 어떤 영향을 끼칠 수 있는지 명시해 놓았네요! 이제 분석을 해보도록 합시닷.
+<br /><br /><br /><br /></p>
+
+<blockquote>
+  <p><strong>분석 환경</strong></p>
+
+  <p>OS : windows xp 32bit<br />
+application version : Adobe Reader XI 11.0.10<br /><br />
+<img src="/assets/images/cve-2019-7063-img/pic1.png" alt="pic1" />
+[그림1] 타겟 어플리케이션 정보</p>
+</blockquote>
+
+<p><br /><br />
+windbg 디버거를 통해 프로세스에 attach 한 후 무작정 실행한 화면 모습은 아래와 같습니다.
+<br /><br />
+<img src="/assets/images/cve-2019-7063-img/pic2.png" alt="pic2" />
+[그림2] windbg 디버거 화면
+<br /><br /><br /><br />
+레지스터를 보면 <strong>eax 값은 0인데</strong> 0x208cbdb0 주소에 위치한 명령어를 실행하다가 <code class="language-plaintext highlighter-rouge">access violation</code> 이 일어납니다. <code class="language-plaintext highlighter-rouge">eax+0x40</code> 연산을 하려다가 <code class="language-plaintext highlighter-rouge">exception</code> 이 일어나고 맙니다.
+<br /><br /><br /><br />
+crash 가 일어나는 함수는 <code class="language-plaintext highlighter-rouge">0x208cbdae</code> 입니다.</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>int __thiscall crashhere_208CBDAE(void *this)
+{
+  return *(*this + 0x40);
+}
+</code></pre></div></div>
+<p><br /><br /><br /><br />
+콜스택을 따라가보기 위해 0x208cbdae 를 호출하는 부분을 찾아보면 나름 많습니다,,
+<br /><br />
+<img src="/assets/images/cve-2019-7063-img/pic3.png" alt="pic3" />
+[그림3] 0x208cbdae 호출 함수 리스트
+<br /><br /><br /><br />
+<br /><br /><br /><br />
+리스트에 보이는 주소에 모두 bp 를 걸면 어디서 0x208cbdae 를 호출하는지 알 수 있습니다. 0x2091d0c8 함수 내용을 보면, crash 일어나는 0x208cbdae 호출하고 있습니다.
+<br /><br /></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>LABEL_56:
+        v32 = *(a1 + 76);
+      }
+      else
+      {
+        v32 = *(a1 + 0x4C);
+        if ( !v32 || !((*(v30 + 152) ^ *(v32 + 152)) &amp; 2) )
+        {
+          if ( sub_2091E2DD(v3 + 48, a1 - 140) || *(v3 + 163) != *(a1 + 80) )
+            goto LABEL_56;
+LABEL_58:
+          v33 = crashhere_208CBDAE((a1 + 92));  // call crash func here!
+          v34 = *v3;
+          *(a1 + 32) = v33;
+          sub_2091D7C4(v34, *(a1 + 76), a1 + 92, v4[2], v16, v4, (a1 + 32));
+          if ( v4[4] == *(v3 + 153) )
+</code></pre></div></div>
+
+<p><br /><br />
+0x208cbdae 함수를 호출할 때, <code class="language-plaintext highlighter-rouge">a1 + 92</code> 가 인자로 들어가게됩니다.
+<br />
+<code class="language-plaintext highlighter-rouge">a1 + 92</code> 이라는 주소가 인자로 들어가고 <code class="language-plaintext highlighter-rouge">0x208cbdae</code> 함수안에서 <code class="language-plaintext highlighter-rouge">a1 + 92</code> 이 가리키는 곳을 참조하다가 exception 이 발생하게 되는것입니다! 즉, <strong><em><code class="language-plaintext highlighter-rouge">a1 + 92</code> 은 0을 가리키고 있는 주소입니다~</em></strong>
+<br /><br />
+<img src="/assets/images/cve-2019-7063-img/pic4.png" alt="pic4" />
+[그림4] a1+92 주소를 참조하는 부분</p>
+
+<p><code class="language-plaintext highlighter-rouge">a1 + 92</code> 주소는 0x208cbdae 함수 호출할 때 ecx 레지스터를 통해 전달되고
+0x208cbdae 함수에서 ecx 가 가리키는 값을 eax 에 담게 되므로 eax 는 0이 됩니다. 그리고 그 다음 명령어 eax, dword ptr [eax+0x40] 을 실행하다가 crash 가 발생합니다.</p>
+
+<blockquote>
+  <p>208cbdae 함수 호출</p>
+  <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>v33 = crashhere_208CBDAE((a1 + 92)); --&gt; a1+92(ecx, 0x12be0c)
+</code></pre></div>  </div>
+</blockquote>
+
+<p><br /></p>
+
+<blockquote>
+  <p>208cbdae 함수 내용</p>
+  <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>.text:208CBDAE                 mov     eax, [ecx] --&gt; eax == 0
+.text:208CBDB0                 mov     eax, [eax+40h]
+</code></pre></div>  </div>
+</blockquote>
+
+<p><br /><br />
+<img src="/assets/images/cve-2019-7063-img/pic5.png" alt="pic5" />
+[그림5] a1 + 92 주소를 참조하는 부분</p>
+
+<p><br /><br /><br /><br />
+그럼 <code class="language-plaintext highlighter-rouge">a1 + 92</code> 변수가 담고있는 주소는 어디서 셋팅이 되느냐,, 
+<br />
+0x2091d0c8 함수내에 있습니다.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>      if ( v21 )
+      
+        sub_20821297((a1 + 92), v21 + 88);      // put 0
+        if ( !(*(*v3 + 52) &amp; 0x1000) )
+</code></pre></div></div>
+<p><br /><br />
+sub_20821297 함수에서 <code class="language-plaintext highlighter-rouge">a1 + 92</code> 주소가 가리키는 곳에 0을 넣게 됩니다.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    if ( v4 )
+      (**v3)(1);
+  }
+  *v2 = *a2; &lt;-- *(al+92) = 0
+  return v2;
+}
+</code></pre></div></div>
+<p><br /><br />
+sub_20821297 함수가 호출될 때, <code class="language-plaintext highlighter-rouge">v21 + 88</code> 주소가 가리키는 곳엔 0으로 셋팅되어 있고
+<br />
+ <code class="language-plaintext highlighter-rouge">*v2 = *a2;</code> 부분에서 <code class="language-plaintext highlighter-rouge">v21 + 88</code> 주소가 가리키는 0 으로 <code class="language-plaintext highlighter-rouge">a1 + 92</code> 가 셋팅됩니다. 그러면 <code class="language-plaintext highlighter-rouge">v21 + 88</code> 주소나 혹은 주소가 가리키는 데이터가 0으로 셋팅되는 시점은 어디일지 함수들을 타고타고 올라가보면.. 취약점의 원인이 되는 부분을 찾을 수 있습니다.</p>
+
+<p><br /><br />
+ 바로 <code class="language-plaintext highlighter-rouge">0x2091b5b6 함수</code>인데요, 아이다로 함수 내용을 보면 처음엔 잘 안보일 수 있습니다.
+ <br /></p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code> int __userpurge callcalllast_2091B5B6@&lt;eax&gt;(int a1@&lt;ecx&gt;, _DWORD *a2@&lt;ebp&gt;, int a3)
+{
+  int *v3; // ebx
+  _DWORD *v4; // eax
+  int v5; // ecx
+  int v6; // ST04_4
+  _DWORD *v7; // eax
+  int v8; // esi
+  int v9; // ST08_4
+  int v10; // ecx
+  int result; // eax
+  int v12; // et1
+  const wchar_t *v13; // [esp-ECh] [ebp-158h]
+  const wchar_t *v14; // [esp-E8h] [ebp-154h]
+  const wchar_t *v15; // [esp-E4h] [ebp-150h]
+  unsigned int v16; // [esp-E0h] [ebp-14Ch]
+  uintptr_t v17; // [esp-DCh] [ebp-148h]
+
+  a2[26] = a1;                                  // for stack cookie (ebp got changed) its hided
+  v3 = a2[29];
+  sub_2087E440(a2, v3 + 1);
+  a2[16] = 3;
+</code></pre></div></div>
+
+<p><br /><br />
+ 함수 초기부분을 어셈블리어로 보면.. <strong><em>security_cookie 를 설정하는 함수가 존재합니다.</em></strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code> .text:2091B5BA                 push    0CCh            ; wchar_t *
+.text:2091B5BF                 mov     eax, offset sub_20DB4E59
+.text:2091B5C4                 call    __EH_prolog3
+.text:2091B5C9                 mov     [ebp+68h], ecx
+</code></pre></div></div>
+
+<p><br /><br /></p>
+<blockquote>
+  <p>security_cookie 설정하는 함수
+```
+push    eax
+push    large dword ptr fs:0
+lea     eax, [esp+8+arg_0]
+sub     esp, [esp+0Ch]
+push    ebx
+push    esi
+push    edi
+mov     [eax], ebp
+mov     ebp, eax &lt;———– ebp gets changed..
+mov     eax, ___security_cookie
+xor     eax, ebp
+push    eax
+push    dword ptr [ebp-4]
+mov     dword ptr [ebp-4], 0FFFFFFFFh
+lea     eax, [ebp-0Ch]
+mov     large fs:0, eax}
+retn</p>
+</blockquote>
+
+<p><br /><br />
+함수에 인자를 전달하거나 지역변수에 접근할때 등등.. 데이터에 접근할때, <strong>ebp 는 굉장히 잘 쓰이는 레지스터</strong>입니다. 그런데 <code class="language-plaintext highlighter-rouge">security_cookie</code> 설정하는 함수 내용을 보면 <code class="language-plaintext highlighter-rouge">mov ebp, eax</code> 명령어가 보입니다. 여기서 ebp 가 담고 있는 주소가 달라지게 되고, <code class="language-plaintext highlighter-rouge">security_cookie</code> 설정하는 함수 이후에 변경된 ebp 레지스터를 기준으로 데이터들이나 인자들에 접근하기때문에 잘못된 ebp 주소에 offset 를 이용하여 접근하게 되고 잘못된 ebp 가 이리저리 여기저기 참조되면서 <code class="language-plaintext highlighter-rouge">0x208cbdae</code> 함수에서 끝내 crash 가 일어나게 됩니다. 
+<br /><br /><br /><br />
+<img src="/assets/images/cve-2019-7063-img/pic6.png" alt="pic6" />
+[그림6] 변경된 ebp 변경으로 발생하는 문제</p>
+
+<p><br /><br />
+패치된 부분을 보면, security_cookie 설정 함수 내에서 ebp 에 값을 쓰는 부분이 사라진 걸 볼수 있습니다.
+<br /></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>text:209764C6 ; __unwind { // SEH_209764C6
+.text:209764C6                 push    ebp
+.text:209764C7                 lea     ebp, [esp-68h]
+.text:209764CB                 sub     esp, 68h
+.text:209764CE                 push    0FFFFFFFFh
+.text:209764D0                 push    offset SEH_209764C6
+.text:209764D5                 mov     eax, large fs:0
+.text:209764DB                 push    eax
+.text:209764DC                 sub     esp, 0CCh
+.text:209764E2                 push    ebx             ; unsigned int
+.text:209764E3                 push    esi             ; wchar_t *
+.text:209764E4                 push    edi             ; wchar_t *
+.text:209764E5                 mov     eax, ___security_cookie
+.text:209764EA                 xor     eax, ebp
+.text:209764EC                 push    eax             ; wchar_t *
+.text:209764ED                 lea     eax, [ebp+68h+var_74]
+.text:209764F0                 mov     large fs:0, eax
+.text:209764F6 ; 24:   v2 = this;
+.text:209764F6                 mov     esi, ecx
+</code></pre></div></div>]]></content><author><name>seculetter</name></author><category term="CVE" /><category term="cve-2019-7063" /><category term="adobe" /><summary type="html"><![CDATA[안녕하세요~ seculetter 분석팀에서 분석한 cve-2019-7063 취약점을 d.이번 포스팅을 통해 공유해드리고자 합니다~ 분석에 들어가기앞서, 취약점 내용을 간단하게 살펴보면.. NVD (national vulnerability database) 라는 미국에서 운영하고 있는 취약점 정보들을 리스팅해놓은 사이트가 있습니다. 해당 홈페이지에서는 cve-2019-7063 취약점에 대해 아래와 같이 설명을 해놓고 있습니다. Adobe Acrobat and Reader versions 2019.010.20069 and earlier, 2019.010.20069 and earlier, 2017.011.30113 and earlier version,and 2015.006.30464 and earlier have an out-of-bounds read vulnerability. Successful exploitation could lead to information disclosure.]]></summary></entry></feed>
